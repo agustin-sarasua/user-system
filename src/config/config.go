@@ -1,5 +1,7 @@
 package config
 
+var Cfg *Configuration = NewConfiguration("")
+
 type Tables struct {
 	User    string
 	Tenant  string
@@ -34,8 +36,9 @@ type Configuration struct {
 	LogLevel      string
 }
 
-func Configure(env string) *Configuration {
+func NewConfiguration(env string) *Configuration {
 	c := &Configuration{
+		Environment: env,
 		Table: &Tables{
 			User: "User",
 		},

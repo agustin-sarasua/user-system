@@ -12,13 +12,93 @@ import (
 	iam "github.com/aws/aws-sdk-go/service/iam"
 )
 
+type cognitoServiceImpl struct {
+}
+
+func NewCognitoService() *cognitoServiceImpl {
+	return &cognitoServiceImpl{}
+}
+
+// var addRoleToIdentityParams = {
+// 	"IdentityPoolId": createdIdentityPool.IdentityPoolId,
+// 	"trustAuthRole": createdTrustPolicyRole.Role.Arn,
+// 	"rolesystem": createdAdminRole.Role.Arn,
+// 	"rolesupportOnly": createdUserRole.Role.Arn,
+// 	"ClientId": createdUserPoolClient.UserPoolClient.ClientId,
+// 	"provider": createdUserPoolClient.UserPoolClient.UserPoolId,
+// 	"adminRoleName": adminPolicyName,
+// 	"userRoleName": userPolicyName
+// };
+
+func sp(s string) *string { return &s }
+
+func (service *cognitoServiceImpl) AddRoleToIdentity(identityPoolID *string, trustAuthRole *string, roleSystem *string, roleSupportOnly *string, clientID *string, provider *string, adminRoleName *string, userRoleName *string) (*ci.SetIdentityPoolRolesOutput, error) {
+	cfg := config.Cfg
+	sess := session.Must(session.NewSession(&aws.Config{
+		MaxRetries: aws.Int(3),
+	}))
+	svc := ci.New(sess, aws.NewConfig().WithRegion(cfg.AwsRegion))
+	providerName := fmt.Sprintf("cognito-idp.%s.amazonaws.com/%s:%s", cfg.CognitoRegion, *provider, *clientID)
+	input := &ci.SetIdentityPoolRolesInput{
+		IdentityPoolId: identityPoolID,
+		Roles:          map[string]*string{"authenticated": trustAuthRole},
+		RoleMappings: map[string]*ci.RoleMapping{providerName: &ci.RoleMapping{
+			Type:                    sp("Rules"),
+			AmbiguousRoleResolution: sp("Deny"),
+			RulesConfiguration: &ci.RulesConfigurationType{
+				Rules: []*ci.MappingRule{
+					&ci.MappingRule{
+						Claim:     sp("custom:role"),
+						MatchType: sp("Equals"),  /* required */
+						RoleARN:   roleSystem,    /* required */
+						Value:     adminRoleName, /* required */
+					},
+					&ci.MappingRule{
+						Claim:     sp("custom:role"),
+						MatchType: sp("Equals"),    /* required */
+						RoleARN:   roleSupportOnly, /* required */
+						Value:     userRoleName,    /* required */
+					},
+				},
+			},
+		}},
+	}
+	return svc.SetIdentityPoolRoles(input)
+}
+
+func (service *cognitoServiceImpl) AddPolicyToRole(policyArn *string, roleName *string) (*iam.AttachRolePolicyOutput, error) {
+	cfg := config.Cfg
+	sess := session.Must(session.NewSession(&aws.Config{
+		MaxRetries: aws.Int(3),
+	}))
+	svc := iam.New(sess, aws.NewConfig().WithRegion(cfg.AwsRegion))
+
+	input := &iam.AttachRolePolicyInput{
+		RoleName:  roleName,
+		PolicyArn: policyArn,
+	}
+	return svc.AttachRolePolicy(input)
+}
+
+func (service *cognitoServiceImpl) CreateRole(policyDocument string, roleName string) (*iam.CreateRoleOutput, error) {
+	cfg := config.Cfg
+	sess := session.Must(session.NewSession(&aws.Config{
+		MaxRetries: aws.Int(3),
+	}))
+	svc := iam.New(sess, aws.NewConfig().WithRegion(cfg.AwsRegion))
+
+	input := &iam.CreateRoleInput{}
+	input = input.SetAssumeRolePolicyDocument(policyDocument).SetRoleName(roleName)
+	return svc.CreateRole(input)
+}
+
 /**
  * Create a policy using the provided configuration parameters
  * @param policyParams The policy configuration
  * @param {Promise} Results of the created policy
  */
-func CreatePolicy(policyName string, policyDocument string) *iam.CreatePolicyOutput {
-	cfg := config.Configure("DEVELOPMENT")
+func (service *cognitoServiceImpl) CreatePolicy(policyName string, policyDocument string) (*iam.CreatePolicyOutput, error) {
+	cfg := config.Cfg
 	// Create Session with MaxRetry configuration to be shared by multiple
 	// service clients.
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -29,10 +109,7 @@ func CreatePolicy(policyName string, policyDocument string) *iam.CreatePolicyOut
 
 	input := &iam.CreatePolicyInput{}
 	input = input.SetPolicyDocument(policyDocument).SetDescription(policyName).SetPolicyName(policyName)
-	out, err := svc.CreatePolicy(input)
-	if err != nil {
-	}
-	return out
+	return svc.CreatePolicy(input)
 }
 
 /**
@@ -40,7 +117,7 @@ func CreatePolicy(policyName string, policyDocument string) *iam.CreatePolicyOut
  * @param trustPolicy The policy to use for this template
  * @returns The populated template
  */
-func GetTrustPolicy(identityPoolID *string) string {
+func (service *cognitoServiceImpl) GetTrustPolicy(identityPoolID *string) string {
 	trustPolicty := fmt.Sprintf(`{
         "Version": "2012-10-17",
         "Statement": [{
@@ -63,7 +140,7 @@ func GetTrustPolicy(identityPoolID *string) string {
 }
 
 type policyParams struct {
-	TenantID        string
+	TenantID        *string
 	ArnPrefix       string
 	CognitoArn      string
 	TenantTableArn  string
@@ -78,12 +155,12 @@ type policyParams struct {
  * @param policyConfig The parameters used to populate the template
  * @returns The populated template
  */
-func GetPolicyTemplate(tenantID string, policyType string, region string, accountID string, userPoolID *string) string {
-	cfg := config.Configure("DEVELOPMENT")
+func (service *cognitoServiceImpl) GetPolicyTemplate(tenantID *string, policyType string, userPoolID *string) string {
+	cfg := config.Cfg
 	// create the ARN prefixes for policies
-	arnPrefix := fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/", region, accountID)
-	databaseArnPrefix := fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/", region, accountID)
-	cognitoArn := fmt.Sprintf("arn:aws:cognito-idp:%s:%s:userpool/%s", region, accountID, *userPoolID)
+	arnPrefix := fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/", cfg.AwsRegion, cfg.AwsAccount)
+	databaseArnPrefix := fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/", cfg.AwsRegion, cfg.AwsAccount)
+	cognitoArn := fmt.Sprintf("arn:aws:cognito-idp:%s:%s:userpool/%s", cfg.AwsRegion, cfg.AwsAccount, *userPoolID)
 
 	policyParams := &policyParams{
 		TenantID:        tenantID,
@@ -113,8 +190,8 @@ func GetPolicyTemplate(tenantID string, policyType string, region string, accoun
  * Create a Cognito Identity Pool with the supplied params
  * @param clientConfigParams The client config params
  */
-func CreateIdentityPool(clientID *string, userPoolID *string, name *string) *ci.IdentityPool {
-	cfg := config.Configure("DEVELOPMENT")
+func (service *cognitoServiceImpl) CreateIdentityPool(clientID *string, userPoolID *string, name *string) *ci.IdentityPool {
+	cfg := config.Cfg
 	// Create Session with MaxRetry configuration to be shared by multiple
 	// service clients.
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -140,8 +217,8 @@ func CreateIdentityPool(clientID *string, userPoolID *string, name *string) *ci.
 /**
  * Create a user pool client for a new tenant
  */
-func CreateUserPoolClient(clientName *string, userPoolID *string) *cip.CreateUserPoolClientOutput {
-	cfg := config.Configure("DEVELOPMENT")
+func (service *cognitoServiceImpl) CreateUserPoolClient(clientName *string, userPoolID *string) *cip.CreateUserPoolClientOutput {
+	cfg := config.Cfg
 	// Create Session with MaxRetry configuration to be shared by multiple
 	// service clients.
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -197,8 +274,8 @@ func strPtr(v string) *string {
  * @param tenantId The ID of the new tenant
  * @param callback Callback with created tenant results
  */
-func CreateUserPool(tenantID string) *cip.CreateUserPoolOutput {
-	cfg := config.Configure("DEVELOPMENT")
+func (service *cognitoServiceImpl) CreateUserPool(tenantID *string) *cip.CreateUserPoolOutput {
+	cfg := config.Cfg
 	// Create Session with MaxRetry configuration to be shared by multiple
 	// service clients.
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -209,8 +286,9 @@ func CreateUserPool(tenantID string) *cip.CreateUserPoolOutput {
 
 	snsArn := cfg.Role.Sns
 
-	input := &cip.CreateUserPoolInput{}
-	input.SetPoolName(tenantID)
+	input := &cip.CreateUserPoolInput{
+		PoolName: tenantID,
+	}
 	input.SetAdminCreateUserConfig(createDefaultAdminCreateUserConfig())
 	phoneNumber := "phone_number"
 	email := "email"
@@ -220,7 +298,7 @@ func CreateUserPool(tenantID string) *cip.CreateUserPoolOutput {
 	input.SetPolicies(createDefaultPolicies())
 	input.SetSchema(createDefaultSchemas())
 	input.SetSmsConfiguration(createDefaultSmsConfig(snsArn))
-	input.SetUserPoolTags(map[string]*string{"someKey": &tenantID})
+	input.SetUserPoolTags(map[string]*string{"someKey": tenantID})
 
 	output, err := svc.CreateUserPool(input)
 	if err != nil {

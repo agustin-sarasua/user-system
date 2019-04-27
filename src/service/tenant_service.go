@@ -2,23 +2,23 @@ package service
 
 import (
 	"github.com/agustin-sarasua/user-system/src/model"
-	"github.com/gin-gonic/gin"
 )
 
-func RegisterTenant(gc *gin.Context) {
-	var t model.Tenant
-	if err := gc.BindJSON(&t); err == nil {
-		tenantExists := tenantExists(t)
-		if !tenantExists {
-			registerTenantAdmin(t)
-		}
-	}
+const (
+	TenantAdminUserRol = "TenantAdmin"
+	TenantUserUserRol  = "TenantUser"
+)
 
+type tenantServiceImpl struct {
 }
 
-func tenantExists(tenant model.Tenant) bool {
-	creds, err := GetSystemCredentials()
-	user, err := LookupUserPoolData(creds, tenant.Username, nil, true)
+func NewTenantService() *tenantServiceImpl {
+	return &tenantServiceImpl{}
+}
+
+func (service *tenantServiceImpl) TenantExists(tenant *model.Tenant) bool {
+	creds, _ := UserSvc.GetSystemCredentials()
+	user, _ := UserSvc.LookupUserPoolData(creds, tenant.Username, nil, true)
 	return user != nil
 }
 
@@ -27,28 +27,28 @@ func tenantExists(tenant model.Tenant) bool {
  * @param tenant The new tenant data
  * @returns {Promise} Results of tenant provisioning
  */
-func registerTenantAdmin(tenant model.Tenant) *model.Tenant {
+func (service *tenantServiceImpl) RegisterTenantAdmin(tenant *model.Tenant) *model.Tenant {
 	// Call user service funcion
-	creds, err := GetSystemCredentials()
+	creds, err := UserSvc.GetSystemCredentials()
 	if err != nil {
 	}
 	u := &model.User{
-		TenantID:   tenant.ID,
+		TenantID:   &tenant.ID,
 		Email:      tenant.Email,
 		FirstName:  tenant.FirstName,
 		LastName:   tenant.LastName,
 		Role:       tenant.Role,
 		Tier:       tenant.Tier,
-		UserPoolID: tenant.UserPoolId,
-		UserName:   tenant.UserName,
+		UserPoolID: &tenant.UserPoolID,
+		Username:   tenant.Username,
 	}
-	err = ProvisionAdminUserWithRoles(u, creds, TenantAdminUserRol, TenantUserUserRol)
+	err = UserSvc.ProvisionAdminUserWithRoles(u, creds, TenantAdminUserRol, TenantUserUserRol)
 	if err != nil {
 
 	}
 	return nil
 }
 
-func saveTenantData(tenant model.Tenant) {
+func (service *tenantServiceImpl) saveTenantData(tenant model.Tenant) {
 
 }

@@ -88,7 +88,7 @@ func getTenantUserPolicy(policyParams *policyParams) string {
                 "Resource": [%s]
             },
         ]
-    }`, policyParams.UserTableArn, policyParams.UserTableArn+"/*", policyParams.TenantID, policyParams.OrderTableArn, policyParams.TenantID, policyParams.ProductTableArn, policyParams.TenantID, policyParams.CognitoArn)
+    }`, policyParams.UserTableArn, policyParams.UserTableArn+"/*", *policyParams.TenantID, policyParams.OrderTableArn, *policyParams.TenantID, policyParams.ProductTableArn, *policyParams.TenantID, policyParams.CognitoArn)
 
 	return tenantUserPolicyTemplate
 }
@@ -166,7 +166,7 @@ func getTenantAdminPolicy(policyParams *policyParams) string {
                     "ForAllValues:StringEquals": {
                         "dynamodb:LeadingKeys": [%s]
                     }
-                }
+				}
             },
             {
                 "Sid": "TenantCognitoAccess",
@@ -183,6 +183,6 @@ func getTenantAdminPolicy(policyParams *policyParams) string {
                 "Resource": [%s]
             },
         ]
-	}`, policyParams.UserTableArn, policyParams.UserTableArn+"/*", policyParams.TenantID, policyParams.OrderTableArn, policyParams.TenantID, policyParams.ProductTableArn, policyParams.TenantID, policyParams.CognitoArn)
+	}`, policyParams.UserTableArn, policyParams.UserTableArn+"/*", *policyParams.TenantID, policyParams.OrderTableArn, *policyParams.TenantID, policyParams.ProductTableArn, *policyParams.TenantID, policyParams.CognitoArn)
 	return tenantAdminPolicyTemplate
 }

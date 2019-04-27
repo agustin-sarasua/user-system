@@ -1,6 +1,11 @@
 package model
 
-import "time"
+import (
+	ci "github.com/aws/aws-sdk-go/service/cognitoidentity"
+	cip "github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
+)
+
+//ddb "github.com/aws/aws-sdk-go/service/dynamodb")
 
 type User struct {
 	ID             string
@@ -9,12 +14,12 @@ type User struct {
 	ClientID       *string
 	Username       string
 	Email          string
-	TenantID       string
+	TenantID       *string
 	Tier           string
 	FirstName      string
 	LastName       string
 	Role           string
-	Sub            string
+	Sub            *string
 }
 
 type Tenant struct {
@@ -38,26 +43,11 @@ type Tenant struct {
 	Sub                 string
 }
 
-type Credentials struct {
-	Claims *Claims
+type ProvisionAdminUserWithRolesOutput struct {
+	Pool              *cip.CreateUserPoolOutput
+	UserPoolClient    *cip.CreateUserPoolClientOutput
+	IdentityPool      *ci.IdentityPool
+	Role              map[string]*string
+	Policy            map[string]*string
+	AddRoleToIdentity *ci.SetIdentityPoolRolesOutput
 }
-
-type Claims struct {
-	SessionToken string
-	AccessKeyID  string
-	SecretKey    string
-	Expiration   time.Time
-}
-
-// type TenantAdminData struct {
-// 	TenantID    string `json:"tenant_id,omitempty"`
-// 	CompanyName string `json:"companyName,omitempty"`
-// 	AccountName string `json:"accountName,omitempty"`
-// 	OwnerName   string `json:"ownerName,omitempty"`
-// 	Tier        string `json:"tier,omitempty"`
-// 	Email       string `json:"email,omitempty"`
-// 	UserName    string `json:"userName,omitempty"`
-// 	Role        string `json:"role,omitempty"`
-// 	FirstName   string `json:"firstName,omitempty"`
-// 	LastName    string `json:"lastName,omitempty"`
-// }

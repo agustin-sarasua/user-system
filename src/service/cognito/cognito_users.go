@@ -4,17 +4,25 @@ import (
 	"github.com/agustin-sarasua/user-system/src/config"
 	"github.com/agustin-sarasua/user-system/src/model"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	cip "github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
 )
+
+type cognitoUserServiceImpl struct {
+}
+
+func NewCognitoUserService() *cognitoUserServiceImpl {
+	return &cognitoUserServiceImpl{}
+}
 
 /**
  * Create a Cognito user with custom attributes
  * @param user User with attribute values
  * @param callback Callback with created user
  */
-func CreateUser(creds *model.Credentials, user *model.User) *cip.AdminCreateUserOutput {
-	cfg := config.Configure("DEVELOPMENT")
+func (service *cognitoUserServiceImpl) CreateUser(creds *credentials.Credentials, user *model.User) *cip.AdminCreateUserOutput {
+	cfg := config.Cfg
 	// Create Session with MaxRetry configuration to be shared by multiple
 	// service clients.
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -38,7 +46,7 @@ func CreateUser(creds *model.Credentials, user *model.User) *cip.AdminCreateUser
 func createAttributeTypes(user *model.User) []*cip.AttributeType {
 	return []*cip.AttributeType{
 		createAttributeType("email", user.Email),
-		createAttributeType("custom:tenant_id", user.TenantID),
+		createAttributeType("custom:tenant_id", *user.TenantID),
 		createAttributeType("given_name", user.FirstName),
 		createAttributeType("family_name", user.LastName),
 		createAttributeType("custom:role", user.Role),

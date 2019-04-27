@@ -1,19 +1,119 @@
 package cognito
 
 import (
+	"fmt"
+
 	"github.com/agustin-sarasua/user-system/src/config"
 	"github.com/agustin-sarasua/user-system/src/logger"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	ci "github.com/aws/aws-sdk-go/service/cognitoidentity"
 	cip "github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
+	iam "github.com/aws/aws-sdk-go/service/iam"
 )
+
+/**
+ * Create a policy using the provided configuration parameters
+ * @param policyParams The policy configuration
+ * @param {Promise} Results of the created policy
+ */
+func CreatePolicy(policyName string, policyDocument string) *iam.CreatePolicyOutput {
+	cfg := config.Configure("DEVELOPMENT")
+	// Create Session with MaxRetry configuration to be shared by multiple
+	// service clients.
+	sess := session.Must(session.NewSession(&aws.Config{
+		MaxRetries: aws.Int(3),
+	}))
+	// Create a CognitoIdentityProvider client with additional configuration
+	svc := iam.New(sess, aws.NewConfig().WithRegion(cfg.AwsRegion))
+
+	input := &iam.CreatePolicyInput{}
+	input = input.SetPolicyDocument(policyDocument).SetDescription(policyName).SetPolicyName(policyName)
+	out, err := svc.CreatePolicy(input)
+	if err != nil {
+	}
+	return out
+}
+
+/**
+ * Get the trust policy template populated with the supplied trust policy
+ * @param trustPolicy The policy to use for this template
+ * @returns The populated template
+ */
+func GetTrustPolicy(identityPoolID *string) string {
+	trustPolicty := fmt.Sprintf(`{
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Principal": {
+                "Federated": "cognito-identity.amazonaws.com"
+            },
+            "Action": "sts:AssumeRoleWithWebIdentity",
+            "Condition": {
+                "StringEquals": {
+                    "cognito-identity.amazonaws.com:aud": %s
+                },
+                "ForAnyValue:StringLike": {
+                    "cognito-identity.amazonaws.com:amr": "authenticated"
+                }
+            }
+        }]
+	}`, *identityPoolID)
+	return trustPolicty
+}
+
+type policyParams struct {
+	TenantID        string
+	ArnPrefix       string
+	CognitoArn      string
+	TenantTableArn  string
+	UserTableArn    string
+	ProductTableArn string
+	OrderTableArn   string
+}
+
+/**
+ * Generate a policy based on the specified type and configuration
+ * @param policyType The type of policy to be created (system admin, system user, tenant admin, tenant user)
+ * @param policyConfig The parameters used to populate the template
+ * @returns The populated template
+ */
+func GetPolicyTemplate(tenantID string, policyType string, region string, accountID string, userPoolID *string) string {
+	cfg := config.Configure("DEVELOPMENT")
+	// create the ARN prefixes for policies
+	arnPrefix := fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/", region, accountID)
+	databaseArnPrefix := fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/", region, accountID)
+	cognitoArn := fmt.Sprintf("arn:aws:cognito-idp:%s:%s:userpool/%s", region, accountID, *userPoolID)
+
+	policyParams := &policyParams{
+		TenantID:        tenantID,
+		ArnPrefix:       arnPrefix,
+		CognitoArn:      cognitoArn,
+		TenantTableArn:  databaseArnPrefix + cfg.Table.Tenant,
+		UserTableArn:    databaseArnPrefix + cfg.Table.User,
+		ProductTableArn: databaseArnPrefix + cfg.Table.Product,
+		OrderTableArn:   databaseArnPrefix + cfg.Table.Order,
+	}
+
+	// populate database params
+	// setup params for templates
+	if policyType == cfg.UserRole.SystemAdmin {
+
+	} else if policyType == cfg.UserRole.SystemUser {
+
+	} else if policyType == cfg.UserRole.TenantAdmin {
+		return getTenantAdminPolicy(policyParams)
+	} else if policyType == cfg.UserRole.TenantUser {
+		return getTenantUserPolicy(policyParams)
+	}
+	return ""
+}
 
 /**
  * Create a Cognito Identity Pool with the supplied params
  * @param clientConfigParams The client config params
  */
-func CreateIdentityPool(clientID string, userPoolID string, name string) *ci.IdentityPool {
+func CreateIdentityPool(clientID *string, userPoolID *string, name *string) *ci.IdentityPool {
 	cfg := config.Configure("DEVELOPMENT")
 	// Create Session with MaxRetry configuration to be shared by multiple
 	// service clients.
@@ -23,11 +123,13 @@ func CreateIdentityPool(clientID string, userPoolID string, name string) *ci.Ide
 	// Create a CognitoIdentityProvider client with additional configuration
 	svc := ci.New(sess, aws.NewConfig().WithRegion(cfg.AwsRegion))
 
-	provider := "cognito-idp." + cfg.AwsRegion + ".amazonaws.com/" + userPoolID
-	input := &ci.CreateIdentityPoolInput{}
-	p := &ci.Provider{}
-	p = p.SetClientId(clientID).SetProviderName(provider).SetServerSideTokenCheck(true)
-	input = input.SetAllowUnauthenticatedIdentities(false).SetIdentityPoolName(name).SetCognitoIdentityProviders([]*ci.Provider{p})
+	provider := "cognito-idp." + cfg.AwsRegion + ".amazonaws.com/" + *userPoolID
+	input := &ci.CreateIdentityPoolInput{
+		IdentityPoolName: name,
+	}
+	p := &ci.Provider{ClientId: clientID}
+	p = p.SetProviderName(provider).SetServerSideTokenCheck(true)
+	input = input.SetAllowUnauthenticatedIdentities(false).SetCognitoIdentityProviders([]*ci.Provider{p})
 
 	out, err := svc.CreateIdentityPool(input)
 	if err != nil {

@@ -17,8 +17,9 @@ func RegisterTenant(gc *gin.Context) {
 }
 
 func tenantExists(tenant model.Tenant) bool {
-	exists := LookupUserPoolData(tenant.Username)
-	return exists
+	creds, err := GetSystemCredentials()
+	user, err := LookupUserPoolData(creds, tenant.Username, nil, true)
+	return user != nil
 }
 
 /**

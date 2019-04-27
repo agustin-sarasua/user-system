@@ -1,21 +1,27 @@
 package model
 
+import "time"
+
 type User struct {
-	UserPoolID string
-	UserName   string
-	Email      string
-	TenantID   string
-	Tier       string
-	FirstName  string
-	LastName   string
-	Role       string
+	ID             string
+	UserPoolID     *string
+	IdentityPoolID *string
+	ClientID       *string
+	Username       string
+	Email          string
+	TenantID       string
+	Tier           string
+	FirstName      string
+	LastName       string
+	Role           string
+	Sub            string
 }
 
 type Tenant struct {
 	ID                  string
 	Username            string
-	UserPoolId          string
-	IdentityPoolId      string
+	UserPoolID          string
+	IdentityPoolID      string
 	SystemAdminRole     string
 	SystemSupportRole   string
 	TrustRole           string
@@ -26,10 +32,21 @@ type Tenant struct {
 	OwnerName           string
 	Tier                string
 	Email               string
-	UserName            string
 	Role                string
 	FirstName           string
 	LastName            string
+	Sub                 string
+}
+
+type Credentials struct {
+	Claims *Claims
+}
+
+type Claims struct {
+	SessionToken string
+	AccessKeyID  string
+	SecretKey    string
+	Expiration   time.Time
 }
 
 // type TenantAdminData struct {

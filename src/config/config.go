@@ -11,6 +11,13 @@ type Roles struct {
 	Sns string
 }
 
+type UserRoles struct {
+	SystemUser  string
+	SystemAdmin string
+	TenantUser  string
+	TenantAdmin string
+}
+
 type Configuration struct {
 	Environment   string
 	AwsRegion     string
@@ -20,7 +27,7 @@ type Configuration struct {
 	ServiceUrl    string
 	Name          string
 	Table         *Tables
-	UserRole      string
+	UserRole      *UserRoles
 	Role          *Roles
 	Tier          string
 	Port          string
@@ -31,6 +38,12 @@ func Configure(env string) *Configuration {
 	c := &Configuration{
 		Table: &Tables{
 			User: "User",
+		},
+		UserRole: &UserRoles{
+			SystemAdmin: "",
+			SystemUser:  "",
+			TenantAdmin: "",
+			TenantUser:  "",
 		},
 	}
 	switch env {

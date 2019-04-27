@@ -1,7 +1,7 @@
 package service
 
 import (
-	"time"
+	"fmt"
 
 	"github.com/agustin-sarasua/user-system/src/config"
 	"github.com/agustin-sarasua/user-system/src/model"
@@ -27,7 +27,7 @@ const (
  * @param isSystemContext Is this being called in the context of a system user (registration, system user provisioning)
  * @param callback The results of the lookup
  */
-func LookupUserPoolData(credentials *Credentials, userID string, tenantID string, isSystemContext bool) (error, *model.User) {
+func LookupUserPoolData(credentials *model.Credentials, userID string, tenantID *string, isSystemContext bool) (*model.User, error) {
 	return nil, nil
 }
 
@@ -77,18 +77,7 @@ func CreateSystemAdminUser(gc *gin.Context) {
 
 }
 
-type Credentials struct {
-	claims *Claims
-}
-
-type Claims struct {
-	SessionToken string
-	AccessKeyId  string
-	SecretKey    string
-	Expiration   time.Time
-}
-
-func GetSystemCredentials() (*Credentials, error) {
+func GetSystemCredentials() (*model.Credentials, error) {
 	sess, err := session.NewSession(&aws.Config{
 		Region:      aws.String("us-west-2"),
 		Credentials: credentials.NewSharedCredentials("", "test-account"),
@@ -104,7 +93,7 @@ func GetSystemCredentials() (*Credentials, error) {
 		return nil, err
 	}
 
-	return &Credentials{claims: &Claims{
+	return &model.Credentials{claims: &model.Claims{
 		SessionToken: creds.SessionToken,
 		AccessKeyId:  creds.AccessKeyID,
 		SecretKey:    creds.SecretAccessKey,
@@ -119,7 +108,7 @@ func GetSystemCredentials() (*Credentials, error) {
  * @param userPolicyName The name of the user policy to be provisioned
  * @param callback Returns an object with the results of the provisioned items
  */
-func ProvisionAdminUserWithRoles(user *model.User, credentials *Credentials, adminPolicyName string, userPolicyName string) error {
+func ProvisionAdminUserWithRoles(user *model.User, credentials *model.Credentials, adminPolicyName string, userPolicyName string) error {
 
 	cfg := config.Configure("DEVELOPMENT")
 
@@ -157,7 +146,44 @@ func ProvisionAdminUserWithRoles(user *model.User, credentials *Credentials, adm
 		// create the new user
 		upo := cognito.CreateUserPool(user.TenantID)
 		upc := cognito.CreateUserPoolClient(upo.UserPool.Name, upo.UserPool.Id)
+		idp := cognito.CreateIdentityPool(upc.UserPoolClient.ClientId, upc.UserPoolClient.UserPoolId, upc.UserPoolClient.ClientName)
+		// create and populate policy templates
+		tp := cognito.GetTrustPolicy(idp.IdentityPoolId)
+		// get the admin policy template
+		adminPolicyTemplate := cognito.GetPolicyTemplate(user.TenantID, adminPolicyName, cfg.AwsRegion, cfg.AwsAccount, upo.UserPool.Id)
+		// setup policy name
+		policyName := fmt.Sprintf("%s-%sPolicy", user.TenantID, adminPolicyName)
+
+		adminPolicy := cognito.CreatePolicy(policyName, adminPolicyTemplate)
+
+		newUser := createNewUser(credentials, upo.UserPool.Id, idp.IdentityPoolId, upc.UserPoolClient.ClientId, user.TenantID, user)
 	}
 
 	return nil
+}
+
+/**
+ * Create a new user using the supplied credentials/user
+ * @param credentials The creds used for the user creation
+ * @param userPoolId The user pool where the user will be added
+ * @param identityPoolId the identityPoolId
+ * @param clientId The client identifier
+ * @param tenantId The tenant identifier
+ * @param newUser The data fro the user being created
+ * @param callback Callback with results for created user
+ */
+func createNewUser(creds *model.Credentials, userPoolID *string, identityPoolID *string, clientID *string, tenantID string, user *model.User) {
+	newUser := &model.User{
+		UserPoolID: userPoolID,
+		TenantID:   tenantID,
+		Email:      user.Email,
+	}
+	cognitoUser := cognito.CreateUser(creds, newUser)
+	newUser.ID = newUser.Username
+	newUser.UserPoolID = userPoolID
+	newUser.IdentityPoolId = identityPoolID,
+	newUser.ClientId = clientID
+	newUser.TenantID = tenantID
+	newUser.Sub = cognitoUser.User.Attributes[0].Value
+	
 }
